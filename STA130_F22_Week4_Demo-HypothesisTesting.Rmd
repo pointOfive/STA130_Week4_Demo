@@ -1,0 +1,114 @@
+---
+title: "STA130 R Hypothesis Testing Demo"
+author: "Scott Schwartz"
+date: "Fall 2022 Week 4"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(eval=TRUE, include=TRUE, echo=TRUE)
+```
+
+There are multiple studies exploring the relationship between gratitude journaling and life satisfaction, mental health, adjusting to university and more. An example of gratitude journaling is writing down three things that you are thankful for at the end of the day. We might all be able to benefit from this science-backed way to live more satisfying lives. To learn more, check out this 10-minute video [An antidote to dissatisfaction](https://www.youtube.com/watch?v=WPPPFqsECz0) from the Kurzgesagt YouTube channel.  To hear a little bit more about mental health more generally, check out this 20-minute TED talk [This could be why you're depressed or anxious](https://www.ted.com/talks/johann_hari_this_could_be_why_you_re_depressed_or_anxious?language=en) by Johann Hari.
+
+The data this week is synthetic, but is loosely based on a study of students in their first year of a five-year college in Turkey. Specifically, 61 Turkish students in their first year of college were randomly assigned to either practice gratitude journaling for three weeks (treatment group, n=30) or to write down a factual account of their day for three weeks (control group, n=31). At the end of the three week period, their life satisfaction (on a scale from 0 to 100) was measured as was their adjustment to university life (on a scale from 48 to 336, where scores over 144 are considered to indicate successful adjustment while scores lower than this indicate difficulties with adjusting). To read more about the study, you can read the original [article](https://link.springer.com/article/10.1007/s10447-017-9289-8).
+
+```{r}
+library(tidyverse)
+gratitude <- read_csv("gratitude.csv")
+gratitude %>% glimpse()
+```
+
+```{r}
+# https://dplyr.tidyverse.org/reference/across.html
+# new functions `across()` and `everything()`
+gratitude %>% mutate(across(everything(), is.na)) %>% 
+  summarise(across(everything(), sum))
+# gratitude %>% is.na() %>% colSums()
+```
+
+```{r}
+gratitude %>% group_by(treatment) %>% 
+  summarise(adjust_college_mean = mean(adjust_college)) -> adjust_college_means
+adjust_college_means
+```
+
+```{r}
+observed_test_statistic_tibble <- adjust_college_means %>% 
+  summarise(observed_test_statistic = diff(adjust_college_mean))
+observed_test_statistic_tibble
+```
+
+```{r}
+observed_test_statistic_tibble %>% as.numeric() -> observed_test_statistic_numeric
+observed_test_statistic_numeric
+```
+
+### Hypothesis Testing
+
+1. State the NULL (and ALTERNATIVE hypotheses)
+
+$H_0$: "treatment" DOES NOT affect the average $\mu$ `adjust_college` scores
+$H_1/H_A$: $H_0$ is `FALSE`
+
+```{r}
+# You have to use latex symbols, like $\mu$
+"μ"
+```
+
+2. Choose $\alpha=0.05$ significance level. [Why "1 in 20"?]
+
+3. Simulate the sampling distribution of the test statistic under the assumption that the NULL hypothesis is `TRUE`
+
+Here's how one single simulation can be run:
+
+```{r}
+# https://stackoverflow.com/questions/29884432/dplyr-integer-sampling-within-mutate
+gratitude_shuffled <- gratitude %>%           # size=1 repeats a single value!
+  mutate(shuffled_treatment = sample(treatment, size=n(), # DO NOT USE 1!!
+                                     prob=rep(1/n(),n()), replace=FALSE) ) 
+                                   # prob=NULL is an equivalent specification
+gratitude_shuffled
+```
+
+You can confirm the above parameter notes by checking the results with the following:
+
+```{r}
+gratitude_shuffled %>% 
+  mutate(shuffled_treatment_numeric = case_when(shuffled_treatment=="treatment" ~ 1), 
+         original_treatment_numeric = case_when(treatment=="treatment" ~ 1)) %>% 
+  summarise(n_shuffled_treatments=sum(shuffled_treatment_numeric, na.rm=TRUE), 
+            n_original_treatments=sum(original_treatment_numeric, na.rm=TRUE))
+```
+
+And now we can create a loop of simulations:
+
+```{r}
+N <- 1000
+permuted_test_statistics <- 1:N
+set.seed(10); for(i in 1:N){
+  gratitude_shuffled <- gratitude %>%           # size=1 repeats the same value
+    mutate(shuffled_treatment = sample(treatment, size=n(), # DO NOT USE 1!
+                                       prob=rep(1/n(),n()), replace=FALSE) ) 
+                                     # prob=NULL is an equivalent specification
+  
+permuted_test_statistics[i] <- gratitude_shuffled %>% group_by(shuffled_treatment) %>% 
+  summarise(adjust_college_permuted_mean = mean(adjust_college)) %>% 
+  summarise(test_statistic = diff(adjust_college_permuted_mean)) %>% as.numeric()
+}
+```
+
+
+4. Calculate p-value 
+
+- What does this mean generally?  What does this specific value mean?
+
+```{r}
+mean(abs(permuted_test_statistics) >= abs(observed_test_statistic_numeric))
+```
+
+5. Make a decision [?]
+
+  
+  
